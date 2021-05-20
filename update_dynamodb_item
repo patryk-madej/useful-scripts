@@ -1,0 +1,27 @@
+import boto3 
+
+def update_db_item(dbItem,dbTable,primaryKey,keyType,keyValue):
+    """dbItem must be a dict of dicts, for example:
+    {'LastSuccessEpoch': {'N': '1616406364'}, 'Enabled': {keyType: '0'}, 'LastSuccessDateTime': {keyType: '2021-03-22 09:46:04'}}"""
+    
+    dynamoDB_client = boto3.client('dynamodb')
+    
+    #Format
+    expression=', '.join(f"{key}=:{key}" for key in dbItem)
+    for key in list(dbItem):
+        dbItem[':'+key]=dbItem.pop(key)
+        
+        
+    print('expression:',expression)
+    print('responses_for_db:',dbItem)
+    
+    #Update
+    response=dynamoDB_client.update_item(TableName=dbTable,
+                                    Key={primaryKey: {keyType: keyValue}},
+                                    ReturnValues='UPDATED_OLD',
+                                    UpdateExpression='set '+expression,
+                                    ExpressionAttributeValues=dbItem
+                                    )
+
+    print("Successfully_updated:",dbItem,type(response))
+    return response
