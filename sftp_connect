@@ -1,0 +1,67 @@
+import paramiko
+import logging
+import os
+from shared_helpers.functions.aws_helpers import AWSHelpers
+
+
+logging.basicConfig(level=logging.INFO,
+                    force=True,
+                    format='%(levelname)s:%(message)s')
+
+
+class Connect():
+    """Connect with a remote server using pem key or password.
+    http://docs.paramiko.org/en/stable/api/sftp.html"""
+
+    def __init__(self, host=None, username=None, key_path=None, password=None, port=22):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.key_path = key_path
+        self.port = port
+
+        self.transport = paramiko.Transport(self.host, self.port)
+
+        if self.key_path is not None:
+            self.key = paramiko.RSAKey.from_private_key_file(self.key_path)
+            self.transport.connect(username=self.username, pkey=self.key)
+            self.password = None
+        else:
+            self.key = None
+            self.transport.connect(username=self.username, password=self.password)
+
+    def cmd(self, command_str):
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(hostname=self.host, username=self.username, pkey=self.key, password=self.password)
+
+        stdin, stdout, stderr = ssh.exec_command(command_str)
+        logging.info(f">> [remote]$ {command_str}")
+        for line in stdout.read().splitlines():
+            logging.info(f">> {str(line, 'utf-8')}")
+        for line in stderr.read().splitlines():
+            logging.error(f">> {str(line, 'utf-8')}")
+
+        ssh.close()
+
+    def ls(self):
+        sftp = paramiko.SFTPClient.from_transport(self.transport)
+        result=sftp.listdir()#.getcwd()#
+        logging.info(f'listdir: {result}')
+        sftp.close()
+        return result
+
+    def put(self, localfile, remotefile):
+        sftp = paramiko.SFTPClient.from_transport(self.transport)
+        sftp.put(localpath=localfile,remotepath=remotefile)
+        sftp.close()
+        if remotefile in self.ls():
+            logging.info('Status code: 200')
+            return 200
+        else:
+            logging.warning("Couldn't confirm success.")
+
+    def get(self, localfile, remotefile):
+        sftp = paramiko.SFTPClient.from_transport(self.transport)
+        sftp.get(localpath=localfile,remotepath=remotefile)
+        sftp.close()
